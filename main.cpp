@@ -114,7 +114,7 @@ class Board {
     return false;
   }
 
-  using Lines = std::array<std::array<std::array<std::array<int16_t, K - 1>, 2>, 4>, N * N>;
+  using Lines = std::array<std::array<std::array<std::array<int16_t, K + 1>, 2>, 4>, N * N>;
 
   static Lines BuildLines() {
     Lines lines;
@@ -128,7 +128,7 @@ class Board {
           int tmp2 = (e << 1) - 1;
           int di = tmp1 * tmp2;
           int dj = (((d ^ tmp1) ^ 2) - 1) * tmp2;
-          for (int k = 0, i = bi + di, j = bj + dj; k < 4; ++k, i += di, j += dj) {
+          for (int k = 0, i = bi + di, j = bj + dj; k < K + 1; ++k, i += di, j += dj) {
             if (i < 0 || i >= N || j < 0 || j >= N) break;
             lines[m][d][e][k] = i * N + j;
           }
@@ -250,9 +250,9 @@ namespace ui {
 template<BoardSize N> 
 class BasicDisplay {
  public:
-  BasicDisplay(std::ostream& os) : os_(os), verbose_(false) {}
+  BasicDisplay(std::ostream& os) : os_(os), verbosity_(2) {}
 
-  void SetVerbose(bool b) { verbose_ = b; }
+  void SetVerbosity(int v) { verbosity_ = v; }
 
   void OnGameStart(const Board<N>& board,
                    const GameResult<N>& result,
@@ -264,6 +264,7 @@ class BasicDisplay {
   }
 
   void OnBeforeMove(const Board<N>& board, const GameResult<N>& result) {
+    if (verbosity_ < 2) return;
     os_ << std::endl
         << "Turn #" << result.history.size() + 1 << std::endl
         << ToPlayerString(board.current_player()) << "'s move" << std::endl
@@ -272,6 +273,7 @@ class BasicDisplay {
   }
 
   void OnAfterMove(const Board<N>& board, const GameResult<N>& result, const Move m) {
+    if (verbosity_ < 1) return;
     os_ << "Move: ";
     PrintMove(os_, m, N);
     os_ << std::endl;
@@ -284,14 +286,14 @@ class BasicDisplay {
   }
 
   void OnGameFinish(const Board<N>& board, const GameResult<N>& result) {
-    os_ << "The game has finished." << std::endl;
+    os_ << "The game has finished after " << result.history.size() << " moves." << std::endl;
     os_ << board << std::endl;
     if (board.winner() == NONE) {
       os_ << "The game was a draw." << std::endl;
     } else {
       os_ << ToPlayerString(board.winner()) << " has won the game." << std::endl;
     }
-    if (verbose_) {
+    if (verbosity_ >= 3) {
       os_ << "Moves:" << std::endl;
       size_t i = 1;
       for (const auto m : result.history) {
@@ -304,18 +306,20 @@ class BasicDisplay {
 
  private:
   std::ostream& os_;
-  bool verbose_;
+  int verbosity_;
 };
 
 }  // namespace ui
 }  // namespace gomoku
 
 int main() {
-  gomoku::Board<15> b;
-  gomoku::GameResult<15> result;
-  gomoku::player::Random p1;
+  constexpr const uint8_t N = 15;
+  gomoku::Board<N> b;
+  gomoku::GameResult<N> result;
+  gomoku::player::Human p1;
   gomoku::player::Random p2;
-  gomoku::ui::BasicDisplay<15> display(std::cout);
-  Play(b, p1, p2, result, display);
+  gomoku::ui::BasicDisplay<N> display(std::cout);
+  display.SetVerbosity(2);
+  gomoku::Play(b, p1, p2, result, display);
   return 0;
 }
