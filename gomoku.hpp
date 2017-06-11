@@ -11,12 +11,12 @@ constexpr const uint8_t K = 5;
 
 using BoardSize = uint8_t;
 using Move = int16_t;
-using Player = int8_t;
+using Player = uint8_t;
 using CellValue = uint8_t;  // use only the last 2 bit
 
 enum : CellValue { BLACK = 0b01, WHITE = 0b11, NONE = 0b00 };
 
-const char* ToSymbol(const CellValue v) {
+inline const char* ToSymbol(const CellValue v) {
   return v == BLACK ? TERM_GRAY("@") : v == WHITE ? "O" : ".";
 }
 
@@ -24,11 +24,11 @@ inline Player GetOppositePlayer(const Player p) {
   return p ^ 0b10;
 }
 
-const char* ToPlayerString(const Player v) {
+inline const char* ToPlayerString(const Player v) {
   return v == BLACK ? "Black" : v == WHITE ? "White" : "None";
 }
 
-void PrintMove(std::ostream& os, const Move m, const BoardSize n) {
+inline void PrintMove(std::ostream& os, const Move m, const BoardSize n) {
   os << "(" << (m / n) + 1 << ", " << (m % n) + 1 << ")";
 }
 
