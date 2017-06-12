@@ -5,7 +5,6 @@
 #include <vector>
 #include "othello.hpp"
 #include "player.hpp"
-#include "util.hpp"
 
 struct Result {
   int dark_time;

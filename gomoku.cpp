@@ -4,7 +4,6 @@
 #include "gomoku.hpp"
 #include "gomoku_config.hpp"
 #include "player.hpp"
-#include "util.hpp"
 
 int main() {
   constexpr const uint8_t N = 11;
