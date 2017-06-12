@@ -8,7 +8,29 @@
 
 namespace algo {
 
-template<class GameTraits, bool Debug = false>
+template<class GameTraits, class RNG = std::mt19937>
+class Random {
+ public:
+  using Board = typename GameTraits::Board;
+  using Move = typename GameTraits::Move;
+  using History = typename GameTraits::History;
+
+  Random(RNG& rng) : rng_(rng) {}
+
+  const char* GetName() const { return "Random"; }
+
+  Move GetNextMove(const Board& board, const History& history) {
+    const auto legal_moves = board.GetLegalMoves();
+    assert(!legal_moves.empty());
+    std::uniform_int_distribution<> dis(0, legal_moves.size() - 1);
+    return legal_moves[dis(rng_)];
+  }
+
+ private:
+  RNG& rng_;
+};
+
+template<class GameTraits, bool Debug = false, class RNG = std::mt19937>
 class GenericMCTS {
  public:
   using Board = typename GameTraits::Board;
@@ -16,73 +38,75 @@ class GenericMCTS {
   using Player = typename GameTraits::Player;
   using History = typename GameTraits::History;
 
-  GenericMCTS(std::chrono::seconds thinking_time)
-      : rd_(),
-        gen_(rd_()),
+  GenericMCTS(RNG& rng, const std::chrono::seconds thinking_time)
+      : rng_(rng),
         bias_(1.4),
         thinking_time_(thinking_time) {
   }
 
-  void SetBias(double b) { bias_ = b; }
+  void SetBias(const double b) { bias_ = b; }
 
   const char* GetName() const { return "GenericMCTS"; }
 
+  // for non-root nodes, (parent->board, this->move) -> this->board
   struct Node {
-    Board board;
-    Player player;
-    Move move;
-    double value;
-    double num_wins;
-    size_t num_visited;
+    double value;        // num_wins / num_visited
+    double num_wins;     // number of wins from the player who made the move
+    size_t num_visited;  // number of simulations from this and all descendant nodes
     Node* parent;
-    Node* left_child;
-    Node* right_sibling;
+    Node* child;
+    Node* sibling;
+    Board board;   // for root node: the initial game state; otherwise the resulting state
+    Move move;     // for non-root nodes: the taken move from parent's state
+
+    // the player who played the taken move
+    Player GetPlayer() const {
+      return parent ? parent->board.current_player() : board.current_player();
+    }
   };
   using Nodes = util::FixedBulk<Node, 10000>;
 
   Move GetNextMove(const Board& board, const History& history) {
     const auto start_time = std::chrono::high_resolution_clock::now();
-    const auto me = board.current_player();
     Move m;
     size_t iter = 0;
     {
       Node& root = nodes_.Create();
-      root.board = board;
-      root.player = me;
-      root.move = -1;
       root.value = 0,
       root.num_wins = 0;
       root.num_visited = 0;
       root.parent = nullptr;
-      root.left_child = nullptr;
-      root.right_sibling = nullptr;
+      root.child = nullptr;
+      root.sibling = nullptr;
+      root.board = board;
+      root.move = GameTraits::GetIllegalMove();
       do {
         for (size_t j = 0; j < 100; ++j) {
           ++iter;
           Node& leaf = Select(root);
           Node& child = leaf.board.IsFinished() ? leaf : Expand(leaf);
-          SimulateAndUpdate(child, me);
+          SimulateAndUpdate(child);
         }
       } while (std::chrono::high_resolution_clock::now() - start_time < thinking_time_);
-      assert(root.left_child);
-      const Node* child = root.left_child;
+      assert(root.child);
+      const Node* child = root.child;
       const Node* best = child;
       double best_value = best->value;
-      while (child->right_sibling) {
-        child = child->right_sibling;
+      while (child->sibling) {
+        child = child->sibling;
         if (child->value > best_value) {
           best = child;
           best_value = best->value;
         }
       }
       if (Debug) {
-        child = root.left_child;
+        child = root.child;
         while (child) {
           std::cout << "[GenericMCTS] Move: ";
           GameTraits::PrintMove(std::cout, child->move);
           std::cout << ", v_i = " << child->value
                     << ", n_i = " << child->num_visited << std::endl;
-          child = child->right_sibling;
+          child = child->sibling;
         }
         std::cout << "[GenericMCTS] Choosen move: ";
         GameTraits::PrintMove(std::cout, best->move);
@@ -110,16 +134,16 @@ class GenericMCTS {
   Node& Select(Node& root) {
     const auto c = bias_;
     Node* leaf = &root;
-    while (leaf->left_child) {
+    while (leaf->child) {
       const double logn = std::log(util::at_least_1(leaf->num_visited));
       auto q_value = [logn, c] (const Node* n) { 
         return n->value + c * std::sqrt(logn / util::at_least_1(n->num_visited));
       };
-      leaf = leaf->left_child;
+      leaf = leaf->child;
       double ucb = q_value(leaf);
       Node* child = leaf;
-      while (child->right_sibling) {
-        child = child->right_sibling;
+      while (child->sibling) {
+        child = child->sibling;
         const double v = q_value(child);
         if (v > ucb) {
           ucb = v;
@@ -134,44 +158,39 @@ class GenericMCTS {
     const auto i = nodes_.size();
     for (const auto m : node.board.GetLegalMoves()) {
       Node& child = nodes_.Create();
-      child.board = node.board;
-      child.player = GameTraits::GetOppositePlayer(node.player);
-      child.move = m;
       child.value = 0;
       child.num_wins = 0;
       child.num_visited = 0;
       child.parent = &node;
-      child.left_child = nullptr;
-      child.right_sibling = nullptr;
+      child.child = nullptr;
+      child.sibling = nullptr;
+      child.board = node.board;
+      child.move = m;
       child.board.Next(m);
-      if (node.left_child) child.right_sibling = node.left_child;
-      node.left_child = &child;
+      if (node.child) child.sibling = node.child;
+      node.child = &child;
     }
     std::uniform_int_distribution<> dis(i, nodes_.size() - 1);
-    return nodes_[dis(gen_)];
+    return nodes_[dis(rng_)];
   }
 
-  void SimulateAndUpdate(Node& node, const Player me) {
+  void SimulateAndUpdate(Node& node) {
     Board board = node.board;
     while (!board.IsFinished()) {
       const auto m = GetRandomMove(board);
       board.Next(m);
     }
-    const bool won = board.winner() == me;
+    const auto winner = board.winner();
     const bool draw = board.IsDraw();
     Node* p = &node;
     for (;;) {
       ++p->num_visited;
-      if (won) {
+      if (p->GetPlayer() == winner) {
         p->num_wins += 1;
       } else if (draw) {
         //p->num_wins += .5;
       }
-      if (p->player == me) {
-        p->value = 1 - p->num_wins / p->num_visited;
-      } else {
-        p->value = p->num_wins / p->num_visited;
-      }
+      p->value = p->num_wins / p->num_visited;
       if (!p->parent) break;
       p = p->parent;
     }
@@ -181,11 +200,10 @@ class GenericMCTS {
     const auto legal_moves = board.GetLegalMoves();
     assert(!legal_moves.empty());
     std::uniform_int_distribution<> dis(0, legal_moves.size() - 1);
-    return legal_moves[dis(gen_)];
+    return legal_moves[dis(rng_)];
   }
 
-  std::random_device rd_;
-  std::mt19937 gen_;
+  RNG& rng_;
   double bias_;
   std::chrono::seconds thinking_time_;
   Nodes nodes_;

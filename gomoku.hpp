@@ -32,6 +32,8 @@ inline void PrintMove(std::ostream& os, const Move m, const BoardSize n) {
   os << "(" << (m / n) + 1 << ", " << (m % n) + 1 << ")";
 }
 
+constexpr const Move IllegalMove = -1;
+
 template<BoardSize N>
 class Board {
   static_assert(N >= K, "N must be >= K");
@@ -209,8 +211,12 @@ struct GameTraits {
     gomoku::PrintMove(os, m, N);
   }
 
-  static Player GetOppositePlayer(const Player p) {
+  static Player GetNextPlayer(const Player p) {
     return gomoku::GetOppositePlayer(p);
+  }
+
+  static Move GetIllegalMove() {
+    return IllegalMove;
   }
 };
 
@@ -223,7 +229,7 @@ class Human {
   template<BoardSize N>
   Move GetNextMove(const Board<N>& board, const History& history) {
     int i, j;
-    Move m = -1;
+    Move m = IllegalMove;
     while (std::cin) {
       std::cout << "Enter next move: ";
       std::cin >> i >> j;
@@ -239,29 +245,10 @@ class Human {
       }
     }
     if (!std::cin) {
-      return -1;  // return illegal move to terminate the game
+      return IllegalMove;  // return illegal move to terminate the game
     }
     return m;
   }
-};
-
-class Random {
- public:
-  Random() : rd_(), gen_(rd_()) {}
-
-  const char* GetName() const { return "Random"; }
-
-  template<BoardSize N>
-  Move GetNextMove(const Board<N>& board, const History& history) {
-    const auto legal_moves = board.GetLegalMoves();
-    assert(!legal_moves.empty());
-    std::uniform_int_distribution<> dis(0, legal_moves.size() - 1);
-    return legal_moves[dis(gen_)];
-  }
-
- private:
-  std::random_device rd_;
-  std::mt19937 gen_;
 };
 
 }  // namespace player
@@ -273,7 +260,7 @@ class BasicDisplay {
  public:
   BasicDisplay(std::ostream& os) : os_(os), verbosity_(2) {}
 
-  void SetVerbosity(int v) { verbosity_ = v; }
+  void SetVerbosity(const int v) { verbosity_ = v; }
 
   void OnGameStart(const Board<N>& board,
                    const GameResult<N>& result,
