@@ -1,9 +1,9 @@
 #include <chrono>
 #include <iostream>
 #include <random>
-#include "algo.hpp"
 #include "gomoku.hpp"
 #include "gomoku_config.hpp"
+#include "player.hpp"
 #include "util.hpp"
 
 int main() {
@@ -24,15 +24,15 @@ int main() {
   std::mt19937 rng4(seed4);
   gomoku::ui::BasicDisplay<N> display(std::cout);
   display.SetVerbosity(2);
-  algo::Random<GT> random1(rng1);
-  algo::Random<GT> random2(rng2);
-  gomoku::player::Human human;
-  algo::GenericMCTS<GT, true> mcts1(rng3, std::chrono::seconds(30));
+  player::Random<GT> random1(rng1);
+  player::Random<GT> random2(rng2);
+  player::Human<GT> human;
+  player::GenericMCTS<GT, true> mcts1(rng3, std::chrono::seconds(3));
   mcts1.SetBias(.4);
-  algo::GenericMCTS<GT, true> mcts2(rng4, std::chrono::seconds(30));
+  player::GenericMCTS<GT, true> mcts2(rng4, std::chrono::seconds(3));
   mcts2.SetBias(.4);
   gomoku::Board<N> b;
   gomoku::GameResult<N> result;
-  gomoku::Play(b, mcts1, mcts2, result, display);
+  gomoku::Play(b, human, human, result, display);
   return 0;
 }

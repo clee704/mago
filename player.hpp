@@ -6,7 +6,41 @@
 #include <random>
 #include "util.hpp"
 
-namespace algo {
+namespace player {
+
+template<class GameTraits>
+class Human {
+ public:
+  using Board = typename GameTraits::Board;
+  using Move = typename GameTraits::Move;
+  using History = typename GameTraits::History;
+
+  const char* GetName() const { return "Human"; }
+
+  Move GetNextMove(const Board& board, const History& history) {
+    int i, j;
+    Move m = GameTraits::GetIllegalMove();
+    while (std::cin) {
+      std::cout << "Enter next move: ";
+      std::cin >> i >> j;
+      if (i >= 1 && i <= GameTraits::MaxPos && j >= 1 && j <= GameTraits::MaxPos) {
+        m = board.GetMove(i, j);
+        if (board.IsLegalMove(m)) {
+          break;
+        } else {
+          std::cerr << "Illegal move" << std::endl;
+        }
+      } else {
+        std::cerr << "Illegal position: enter two numbers between 1 and "
+                  << static_cast<int>(GameTraits::MaxPos) << std::endl;
+      }
+    }
+    if (!std::cin) {
+      return GameTraits::GetIllegalMove();  // return illegal move to terminate the game
+    }
+    return m;
+  }
+};
 
 template<class GameTraits, class RNG = std::mt19937>
 class Random {
@@ -38,7 +72,7 @@ class GenericMCTS {
   using Player = typename GameTraits::Player;
   using History = typename GameTraits::History;
 
-  GenericMCTS(RNG& rng, const std::chrono::seconds thinking_time)
+  GenericMCTS(RNG& rng, int thinking_time)
       : rng_(rng),
         bias_(1.4),
         thinking_time_(thinking_time) {
@@ -205,8 +239,8 @@ class GenericMCTS {
 
   RNG& rng_;
   double bias_;
-  std::chrono::seconds thinking_time_;
+  std::chrono::milliseconds thinking_time_;
   Nodes nodes_;
 };
 
-}  // namespace algo
+}  // namespace player

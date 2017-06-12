@@ -20,7 +20,7 @@ inline const char* ToSymbol(const CellValue v) {
   return v == BLACK ? TERM_GRAY("@") : v == WHITE ? "O" : ".";
 }
 
-inline Player GetOppositePlayer(const Player p) {
+inline constexpr Player GetOppositePlayer(const Player p) {
   return p ^ 0b10;
 }
 
@@ -37,10 +37,14 @@ constexpr const Move IllegalMove = -1;
 template<BoardSize N>
 class Board {
   static_assert(N >= K, "N must be >= K");
-  static_assert(N <= 181, "N must be <= 181");
+  static_assert(N <= 57, "N must be <= 57");
 
  public:
   using Array = util::BitPack<2, N * N>;
+
+  static constexpr Move GetMove(const int i, const int j) {
+    return (i - 1) * N + j - 1;
+  }
 
   Board() : array_(), current_player_(BLACK), winner_(NONE), number_of_moves_(0) {}
 
@@ -62,9 +66,7 @@ class Board {
     return !IsFinished() && m >= 0 && m < N * N && array_[m] == NONE;
   }
 
-  void Next(const int i, const int j) {
-    Next((i - 1) * N + (j - 1));
-  }
+  void Next(const int i, const int j) { Next(GetMove(i, j)); }
 
   void Next(const Move m) {
     assert(IsLegalMove(m));
@@ -84,7 +86,7 @@ class Board {
 
  private:
   void CheckWinner(const Move m) {
-    const auto v = array_[m];
+    const CellValue v = array_[m];
     if (CheckLine<0>(m, v)) return;
     if (CheckLine<1>(m, v)) return;
     if (CheckLine<2>(m, v)) return;
@@ -121,29 +123,7 @@ class Board {
     return false;
   }
 
-  using Lines = std::array<std::array<std::array<std::array<int16_t, K + 1>, 2>, 4>, N * N>;
-
-  static Lines BuildLines() {
-    Lines lines;
-    for (Move m = 0; m < N * N; ++m) {
-      for (int d = 0; d < 4; ++d) {
-        for (int e = 0; e < 2; ++e) {
-          lines[m][d][e].fill(-1);
-          int bi = m / N;
-          int bj = m % N;
-          int tmp1 = (d | (d >> 1)) & 1;
-          int tmp2 = (e << 1) - 1;
-          int di = tmp1 * tmp2;
-          int dj = (((d ^ tmp1) ^ 2) - 1) * tmp2;
-          for (int k = 0, i = bi + di, j = bj + dj; k < K + 1; ++k, i += di, j += dj) {
-            if (i < 0 || i >= N || j < 0 || j >= N) break;
-            lines[m][d][e][k] = i * N + j;
-          }
-        }
-      }
-    }
-    return lines;
-  }
+  using Lines = util::Lines<int16_t, N, K>;
 
   static const Lines lines_;
   Array array_;
@@ -153,7 +133,7 @@ class Board {
 };
 
 template<BoardSize N>
-const typename Board<N>::Lines Board<N>::lines_ = Board<N>::BuildLines();
+const typename Board<N>::Lines Board<N>::lines_ = util::BuildLines<int16_t, N, K>();
 
 template<BoardSize N>
 std::ostream& operator<<(std::ostream& os, const Board<N>& board) {
@@ -176,7 +156,11 @@ struct GameResult {
 };
 
 template<BoardSize N, class Black, class White, class Display>
-void Play(Board<N>& board, Black& p1, White& p2, GameResult<N>& result, Display& display) {
+void Play(Board<N>& board,
+          Black& p1,
+          White& p2,
+          GameResult<N>& result,
+          Display& display) {
   auto get_next_move = [&p1, &p2] (const Board<N>& board, const History& history) {
     return board.current_player() == BLACK
         ? p1.GetNextMove(board, history)
@@ -207,51 +191,14 @@ struct GameTraits {
   using Player = gomoku::Player;
   using History = gomoku::History;
 
+  static constexpr auto MaxPos = N;
+
   static void PrintMove(std::ostream& os, const Move m) {
     gomoku::PrintMove(os, m, N);
   }
 
-  static Player GetNextPlayer(const Player p) {
-    return gomoku::GetOppositePlayer(p);
-  }
-
-  static Move GetIllegalMove() {
-    return IllegalMove;
-  }
+  static Move GetIllegalMove() { return IllegalMove; }
 };
-
-namespace player {
-
-class Human {
- public:
-  const char* GetName() const { return "Human"; }
-
-  template<BoardSize N>
-  Move GetNextMove(const Board<N>& board, const History& history) {
-    int i, j;
-    Move m = IllegalMove;
-    while (std::cin) {
-      std::cout << "Enter next move: ";
-      std::cin >> i >> j;
-      if (i >= 1 && i <= N && j >= 1 && j <= N) {
-        m = (i - 1) * N + (j - 1);
-        if (board.IsLegalMove(m)) {
-          break;
-        } else {
-          std::cerr << "Illegal move" << std::endl;
-        }
-      } else {
-        std::cerr << "Illegal position: enter two numbers between 1 and " << static_cast<int>(N) << std::endl;
-      }
-    }
-    if (!std::cin) {
-      return IllegalMove;  // return illegal move to terminate the game
-    }
-    return m;
-  }
-};
-
-}  // namespace player
 
 namespace ui {
 
@@ -294,8 +241,9 @@ class BasicDisplay {
   }
 
   void OnGameFinish(const Board<N>& board, const GameResult<N>& result) {
-    os_ << "The game has finished after " << result.history.size() << " moves." << std::endl;
-    os_ << board << std::endl;
+    os_ << "The game has finished after "
+        << result.history.size() << " moves." << std::endl
+        << board << std::endl;
     if (result.winner == NONE) {
       os_ << "The game was a draw." << std::endl;
     } else {

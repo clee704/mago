@@ -115,50 +115,30 @@ class BitPack {
   friend class ElementProxy;
 };
 
-inline void TestBitPack() {
-  BitPack<2, 9> bitpack;
-  assert(bitpack[0] == 0);
-  assert(bitpack[1] == 0);
-  assert(bitpack[2] == 0);
-  assert(bitpack[3] == 0);
-  assert(bitpack[4] == 0);
-  assert(bitpack[5] == 0);
-  assert(bitpack[6] == 0);
-  assert(bitpack[7] == 0);
-  assert(bitpack[8] == 0);
-  bitpack[0] = 1;
-  assert(bitpack[0] == 1);
-  assert(bitpack[1] == 0);
-  assert(bitpack[2] == 0);
-  assert(bitpack[3] == 0);
-  assert(bitpack[4] == 0);
-  assert(bitpack[5] == 0);
-  assert(bitpack[6] == 0);
-  assert(bitpack[7] == 0);
-  assert(bitpack[8] == 0);
-  bitpack[3] = 3;
-  assert(bitpack[0] == 1);
-  assert(bitpack[1] == 0);
-  assert(bitpack[2] == 0);
-  assert(bitpack[3] == 3);
-  assert(bitpack[4] == 0);
-  assert(bitpack[5] == 0);
-  assert(bitpack[6] == 0);
-  assert(bitpack[7] == 0);
-  assert(bitpack[8] == 0);
-  bitpack[2] = 1;
-  bitpack[3] = 0;
-  bitpack[7] = 2;
-  bitpack[8] = 1;
-  assert(bitpack[0] == 1);
-  assert(bitpack[1] == 0);
-  assert(bitpack[2] == 1);
-  assert(bitpack[3] == 0);
-  assert(bitpack[4] == 0);
-  assert(bitpack[5] == 0);
-  assert(bitpack[6] == 0);
-  assert(bitpack[7] == 2);
-  assert(bitpack[8] == 1);
+template<class T, int N, int K>
+using Lines = std::array<std::array<std::array<std::array<T, K>, 2>, 4>, N * N>;
+
+template<class T, int N, int K>
+Lines<T, N, K> BuildLines() {
+  Lines<T, N, K> lines;
+  for (int m = 0; m < N * N; ++m) {
+    for (int d = 0; d < 4; ++d) {
+      for (int e = 0; e < 2; ++e) {
+        lines[m][d][e].fill(-1);
+        int bi = m / N;
+        int bj = m % N;
+        int tmp1 = (d | (d >> 1)) & 1;
+        int tmp2 = (e << 1) - 1;
+        int di = tmp1 * tmp2;
+        int dj = (((d ^ tmp1) ^ 2) - 1) * tmp2;
+        for (int k = 0, i = bi + di, j = bj + dj; k < K; ++k, i += di, j += dj) {
+          if (i < 0 || i >= N || j < 0 || j >= N) break;
+          lines[m][d][e][k] = i * N + j;
+        }
+      }
+    }
+  }
+  return lines;
 }
 
 }  // namespace util
