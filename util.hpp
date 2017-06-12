@@ -32,7 +32,8 @@ class FixedBulk {
     return (*bulks_.back().first)[bulks_.back().second++];
   }
 
-  T& operator[](const size_t i) const { return (*bulks_[i / N].first)[i % N]; }
+  const T& operator[](const size_t i) const { return (*bulks_[i / N].first)[i % N]; }
+  T& operator[](const size_t i) { return (*bulks_[i / N].first)[i % N]; }
 
  private:
   std::vector<std::pair<std::unique_ptr<std::array<T, N>>, size_t>> bulks_;
@@ -52,13 +53,13 @@ class BitPack {
 
   class ElementProxy {
    public:
-    ElementProxy(BitPack& bitpack, size_t index) : bitpack_(bitpack), index_(index) {}
+    ElementProxy(BitPack& bitpack, const size_t index) : bitpack_(bitpack), index_(index) {}
 
     operator uint8_t() const {
       return static_cast<const BitPack&>(bitpack_)[index_];
     }
 
-    ElementProxy& operator=(uint8_t value) {
+    ElementProxy& operator=(const uint8_t value) {
       auto& bits = bitpack_.bits_;
       const uint8_t v = value & GetMask(B);
       const size_t j = index_ * B / 8;
@@ -87,7 +88,7 @@ class BitPack {
     size_t index_;
   };
 
-  uint8_t operator[](size_t i) const {
+  uint8_t operator[](const size_t i) const {
     const size_t j = i * B / 8;
     const int k = i * B % 8;
     if (8 % B == 0) {
@@ -104,7 +105,7 @@ class BitPack {
     }
   }
 
-  ElementProxy operator[](size_t i) {
+  ElementProxy operator[](const size_t i) {
     return ElementProxy(*this, i);
   }
 
